@@ -51,8 +51,9 @@
 /* Private define ------------------------------------------------------------*/
 /* Private macro -------------------------------------------------------------*/
 /* Private variables ---------------------------------------------------------*/
+extern uint8_t rxBuff[4];
 extern TIM_HandleTypeDef    TimHandle;
-
+extern UART_HandleTypeDef		huart2;
 /* Private function prototypes -----------------------------------------------*/
 /* Private functions ---------------------------------------------------------*/
 
@@ -153,6 +154,17 @@ void TIM2_IRQHandler(void)
 void EXTI4_15_IRQHandler(void)
 {
   HAL_GPIO_EXTI_IRQHandler(KEY_BUTTON_PIN);
+}
+
+/**
+  * @brief  This function handles USART2 interrupt request.
+  * @param  None
+  * @retval None
+  */
+void USART2_IRQHandler(void)
+{
+  HAL_UART_IRQHandler(&huart2);
+	HAL_UART_Receive_IT(&huart2, rxBuff, sizeof rxBuff/ sizeof rxBuff[0]);
 }
 
 /**

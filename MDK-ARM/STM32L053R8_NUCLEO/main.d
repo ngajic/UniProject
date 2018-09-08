@@ -1,4 +1,5 @@
 stm32l053r8_nucleo\main.o: ../Src/main.c
+stm32l053r8_nucleo\main.o: D:\Keil_v5\ARM\ARMCC\Bin\..\include\stdlib.h
 stm32l053r8_nucleo\main.o: ../Inc/main.h
 stm32l053r8_nucleo\main.o: ../../../../Drivers/STM32L0xx_HAL_Driver/Inc/stm32l0xx_hal.h
 stm32l053r8_nucleo\main.o: ../Inc/stm32l0xx_hal_conf.h

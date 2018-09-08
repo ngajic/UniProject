@@ -36,6 +36,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 
+
 /** @addtogroup STM32L0xx_HAL_Examples
   * @{
   */
@@ -48,6 +49,12 @@
 /* Private define ------------------------------------------------------------*/
 /* Private macro -------------------------------------------------------------*/
 /* Private variables ---------------------------------------------------------*/
+
+static int thold = 1000;
+uint8_t rxBuff[4];
+
+/* USART2 handler declaration */
+UART_HandleTypeDef			huart2;
 
 /* Timer handler declaration */
 TIM_HandleTypeDef        TimHandle;
@@ -69,6 +76,7 @@ __IO uint32_t            uwFrequency = 0;
 static void SystemClock_Config(void);
 static void Error_Handler(void);
 static void EXTILine4_15_Config(void);
+static void USART2_UART_Init(void);
 
 /* Private functions ---------------------------------------------------------*/
 
@@ -169,6 +177,8 @@ int main(void)
 	
 	/* Configure EXTI Line13 (connected to PC13 pin) in interrupt mode */
 	EXTILine4_15_Config();
+	
+	USART2_UART_Init();
 
   /* Infinite loop */
   while (1)
@@ -203,6 +213,11 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
       uwFrequency = 0;
     }
   }
+	
+	if (uwFrequency < thold)
+		BSP_LED_On(LED2);
+	else
+		BSP_LED_Off(LED2);
 }
 
 /**
@@ -259,6 +274,27 @@ static void SystemClock_Config(void)
   }
 }
 
+/* USART2 init function */
+static void USART2_UART_Init(void)
+{
+
+  huart2.Instance = USART2;
+  huart2.Init.BaudRate = 115200;
+  huart2.Init.WordLength = UART_WORDLENGTH_8B;
+  huart2.Init.StopBits = UART_STOPBITS_1;
+  huart2.Init.Parity = UART_PARITY_NONE;
+  huart2.Init.Mode = UART_MODE_TX_RX;
+  huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart2.Init.OverSampling = UART_OVERSAMPLING_16;
+  huart2.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
+  huart2.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
+  if (HAL_UART_Init(&huart2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+	__HAL_UART_ENABLE_IT(&huart2, UART_IT_RXNE);
+}
+
 /**
   * @brief  Configures EXTI Line13 (connected to PC13 pin) in interrupt mode.
   * @param  None
@@ -298,6 +334,14 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
   
 }
 
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+	int i;
+	size_t len = sizeof rxBuff/ sizeof rxBuff[0];
+	for(thold = 0, i = 0 ; i < len; ++i)
+		thold = 10 * thold + rxBuff[i] - '0';
+}
+
 /**
   * @brief  This function is executed in case of error occurrence.
   * @param  None
@@ -309,7 +353,7 @@ static void Error_Handler(void)
   while(1)
   {
 		BSP_LED_Toggle(LED2);
-		HAL_Delay(5000);
+		HAL_Delay(1000);
   }
 }
 
