@@ -1,8 +1,10 @@
 /**
   ******************************************************************************
-  * @file    Templates/Src/main.c 
+  * @file    TIM/TIM_PWMInput/Src/main.c 
   * @author  MCD Application Team
-  * @brief   Main program body
+  * @brief   This sample code shows how to use STM32L0xx TIM HAL API to measure
+  *          the frequency and duty cycle of an external signal through the
+  *          STM32L0xx HAL API.
   ******************************************************************************
   * @attention
   *
@@ -36,21 +38,22 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 
-
 /** @addtogroup STM32L0xx_HAL_Examples
   * @{
   */
 
-/** @addtogroup Templates
+/** @addtogroup TIM_PWMInput
   * @{
-  */
+  */ 
 
 /* Private typedef -----------------------------------------------------------*/
 /* Private define ------------------------------------------------------------*/
 /* Private macro -------------------------------------------------------------*/
 /* Private variables ---------------------------------------------------------*/
 
-static int thold = 1000;
+/* Prescaler value for TIM2 input clock */
+static uint16_t thold = 80;
+static unsigned short prescaler = 64;
 uint8_t rxBuff[4];
 
 /* USART2 handler declaration */
@@ -74,9 +77,8 @@ __IO uint32_t            uwFrequency = 0;
 
 /* Private function prototypes -----------------------------------------------*/
 static void SystemClock_Config(void);
-static void Error_Handler(void);
-static void EXTILine4_15_Config(void);
 static void USART2_UART_Init(void);
+static void ErrorHandler(void);
 
 /* Private functions ---------------------------------------------------------*/
 
@@ -87,7 +89,9 @@ static void USART2_UART_Init(void);
   */
 int main(void)
 {
-
+ /*This sample code shows how to use STM32L0xx TIM HAL API to measure the
+  frequency and duty cycle of an external signal through the STM32L0xx HAL API. */
+  
   /* STM32L0xx HAL library initialization:
        - Configure the Flash prefetch, Flash preread and Buffer caches
        - Systick timer is configured by default as source of time base, but user 
@@ -98,14 +102,17 @@ int main(void)
        - Low Level Initialization
      */
   HAL_Init();
-
-  /* Configure the System clock to have a frequency of 2 MHz (Up to 32MHZ possible) */
+  
+  /* Configure the system clock */
   SystemClock_Config();
-
-
-  /* Add your application code here
-     */
-	  /*##-1- Configure the TIM peripheral #######################################*/ 
+  
+	/* Configure LED2 */
+	BSP_LED_Init(LED2);
+	
+	/* Configure UART2 peripheral */
+	USART2_UART_Init();
+	
+  /*##-1- Configure the TIM peripheral #######################################*/ 
   /* Set TIM instance */
   TimHandle.Instance = TIM2;
  
@@ -116,18 +123,18 @@ int main(void)
        + Counter direction = Up
   */
   TimHandle.Init.Period = 0xFFFF;
-  TimHandle.Init.Prescaler = 0;
+  TimHandle.Init.Prescaler = prescaler - 1; /* Divide 32 MHz input clock with 64 */
   TimHandle.Init.ClockDivision = 0;
   TimHandle.Init.CounterMode = TIM_COUNTERMODE_UP;  
   if(HAL_TIM_IC_Init(&TimHandle) != HAL_OK)
   {
     /* Initialization Error */
-    Error_Handler();
+    ErrorHandler();
   }
   
   /*##-2- Configure the Input Capture channels ###############################*/ 
   /* Common configuration */
-  sConfig.ICPrescaler = TIM_ICPSC_DIV1;
+  sConfig.ICPrescaler = TIM_ICPSC_DIV8; // NIKOLA IZBACI PO POTREBI
   sConfig.ICFilter = 0;  
   
   /* Configure the Input Capture of channel 1 */
@@ -136,7 +143,7 @@ int main(void)
   if(HAL_TIM_IC_ConfigChannel(&TimHandle, &sConfig, TIM_CHANNEL_1) != HAL_OK)
   {
     /* Configuration Error */
-    Error_Handler();
+    ErrorHandler();
   }
   
   /* Configure the Input Capture of channel 2 */
@@ -145,7 +152,7 @@ int main(void)
   if(HAL_TIM_IC_ConfigChannel(&TimHandle, &sConfig, TIM_CHANNEL_2) != HAL_OK)
   {
     /* Configuration Error */
-    Error_Handler();
+    ErrorHandler();
   }
   
   /*##-3- Configure the slave mode ###########################################*/
@@ -155,35 +162,26 @@ int main(void)
   if(HAL_TIM_SlaveConfigSynchronization(&TimHandle, &sSlaveConfig) != HAL_OK)
   {
     /* Configuration Error */
-    Error_Handler();
+    ErrorHandler();
   }
   
   /*##-4- Start the Input Capture in interrupt mode ##########################*/
   if(HAL_TIM_IC_Start_IT(&TimHandle, TIM_CHANNEL_2) != HAL_OK)
   {
     /* Starting Error */
-    Error_Handler();
+    ErrorHandler();
   }
   
   /*##-5- Start the Input Capture in interrupt mode ##########################*/
   if(HAL_TIM_IC_Start_IT(&TimHandle, TIM_CHANNEL_1) != HAL_OK)
   {
     /* Starting Error */
-    Error_Handler();
+    ErrorHandler();
   }
-
-	/* Initialize LED for error tracking */
-	BSP_LED_Init(LED2);
-	
-	/* Configure EXTI Line13 (connected to PC13 pin) in interrupt mode */
-	EXTILine4_15_Config();
-	
-	USART2_UART_Init();
-
-  /* Infinite loop */
+  
   while (1)
   {
-  }
+  } 
 }
 
 /**
@@ -205,32 +203,50 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
       
       /* uwFrequency computation
       TIM2 counter clock = RCC_Clocks.HCLK_Frequency */      
-      uwFrequency = HAL_RCC_GetHCLKFreq()/ (uwIC2Value + 1);
+      uwFrequency = HAL_RCC_GetHCLKFreq()/ (uwIC2Value + 1)/ prescaler;
     }
     else
     {
       uwDutyCycle = 0;
       uwFrequency = 0;
     }
+		
+		if (uwFrequency < thold)
+			BSP_LED_On(LED2);
+		else
+			BSP_LED_Off(LED2);
   }
+}
+
+/**
+  * @brief  Rx Transfer completed callback
+  * @param  UartHandle: UART handle
+  * @note   This example shows a simple way to report end of IT Rx transfer, and 
+  *         you can add your own implementation.
+  * @retval None
+  */
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *UartHandle)
+{
+  int i;
 	
-	if (uwFrequency < thold)
-		BSP_LED_On(LED2);
-	else
-		BSP_LED_Off(LED2);
+	for (thold = 0, i = 0; i < sizeof rxBuff/ sizeof rxBuff[0]; ++i)
+		thold = 10 * thold + rxBuff[i] - '0';
 }
 
 /**
   * @brief  System Clock Configuration
   *         The system Clock is configured as follow : 
-  *            System Clock source            = MSI
-  *            SYSCLK(Hz)                     = 2000000
-  *            HCLK(Hz)                       = 2000000
+  *            System Clock source            = PLL (HSI)
+  *            SYSCLK(Hz)                     = 32000000
+  *            HCLK(Hz)                       = 32000000
   *            AHB Prescaler                  = 1
   *            APB1 Prescaler                 = 1
   *            APB2 Prescaler                 = 1
-  *            Flash Latency(WS)              = 0
-  *            Main regulator output voltage  = Scale3 mode
+  *            HSI Frequency(Hz)              = 16000000
+  *            PLL_MUL                        = 4
+  *            PLL_DIV                        = 2
+  *            Flash Latency(WS)              = 1
+  *            Main regulator output voltage  = Scale1 mode
   * @param  None
   * @retval None
   */
@@ -245,36 +261,34 @@ static void SystemClock_Config(void)
   /* The voltage scaling allows optimizing the power consumption when the device is 
      clocked below the maximum system frequency, to update the voltage scaling value 
      regarding system frequency refer to product datasheet.  */
-  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE3);
-  
-  /* Enable MSI Oscillator */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_MSI;
-  RCC_OscInitStruct.MSIState = RCC_MSI_ON;
-  RCC_OscInitStruct.MSIClockRange = RCC_MSIRANGE_5;
-  RCC_OscInitStruct.MSICalibrationValue=0x00;
-  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
-  if(HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
-  {
-    /* Initialization Error */
-    Error_Handler();
-  }
-  
-  
-  /* Select MSI as system clock source and configure the HCLK, PCLK1 and PCLK2 
+  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
+
+  /* Enable HSI Oscillator and activate PLL with HSI as source */
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
+  RCC_OscInitStruct.HSEState = RCC_HSE_OFF;
+  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
+  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL4;
+  RCC_OscInitStruct.PLL.PLLDIV = RCC_PLL_DIV2;
+  RCC_OscInitStruct.HSICalibrationValue = 0x10;
+  HAL_RCC_OscConfig(&RCC_OscInitStruct);
+//	RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
+//  RCC_OscInitStruct.MSIState = RCC_MSI_ON;
+//  RCC_OscInitStruct.MSIClockRange = RCC_MSIRANGE_5;
+//  RCC_OscInitStruct.MSICalibrationValue=0x00;
+//  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
+//	HAL_RCC_OscConfig(&RCC_OscInitStruct);  
+  /* Select PLL as system clock source and configure the HCLK, PCLK1 and PCLK2 
      clocks dividers */
   RCC_ClkInitStruct.ClockType = (RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2);
-  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_MSI;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;  
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;  
-  if(HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
-  {
-    /* Initialization Error */
-    Error_Handler();
-  }
+  HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_1);
 }
 
-/* USART2 init function */
 static void USART2_UART_Init(void)
 {
 
@@ -290,56 +304,9 @@ static void USART2_UART_Init(void)
   huart2.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
   if (HAL_UART_Init(&huart2) != HAL_OK)
   {
-    Error_Handler();
+    ErrorHandler();
   }
 	__HAL_UART_ENABLE_IT(&huart2, UART_IT_RXNE);
-}
-
-/**
-  * @brief  Configures EXTI Line13 (connected to PC13 pin) in interrupt mode.
-  * @param  None
-  * @retval None
-  */
-static void EXTILine4_15_Config(void)
-{
-  GPIO_InitTypeDef   GPIO_InitStructure;
-
-  /* Enable GPIOC clock */
-  __HAL_RCC_GPIOC_CLK_ENABLE();
-  
-  /* Configure PC13 pin as input floating */
-  GPIO_InitStructure.Mode = GPIO_MODE_IT_RISING_FALLING;
-  GPIO_InitStructure.Pull = GPIO_NOPULL;
-  GPIO_InitStructure.Pin = GPIO_PIN_13;
-	GPIO_InitStructure.Speed = GPIO_SPEED_FREQ_HIGH  ;
-  HAL_GPIO_Init(GPIOC, &GPIO_InitStructure);
-
-  /* Enable and set EXTI4_15 Interrupt to the lowest priority */
-  HAL_NVIC_SetPriority(EXTI4_15_IRQn, 3, 0);
-  HAL_NVIC_EnableIRQ(EXTI4_15_IRQn);
-}
-
-/**
-  * @brief EXTI line detection callback.
-  * @param GPIO_Pin: Specifies the pins connected EXTI line
-  * @retval None
-  */
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
-{
-  if(GPIO_Pin == KEY_BUTTON_PIN)
-  {
-    /* Toggle LED2 */
-    BSP_LED_Toggle(LED2);
-  }
-  
-}
-
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
-{
-	int i;
-	size_t len = sizeof rxBuff/ sizeof rxBuff[0];
-	for(thold = 0, i = 0 ; i < len; ++i)
-		thold = 10 * thold + rxBuff[i] - '0';
 }
 
 /**
@@ -347,16 +314,13 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
   * @param  None
   * @retval None
   */
-static void Error_Handler(void)
+static void ErrorHandler(void)
 {
-  /* User may add here some code to deal with this error */
+  /* Infinite loop */
   while(1)
   {
-		BSP_LED_Toggle(LED2);
-		HAL_Delay(1000);
   }
 }
-
 #ifdef  USE_FULL_ASSERT
 
 /**

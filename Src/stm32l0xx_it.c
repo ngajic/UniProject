@@ -1,6 +1,6 @@
 /**
   ******************************************************************************
-  * @file    Templates/Src/stm32l0xx_it.c 
+  * @file    TIM/TIM_PWMInput/Src/stm32l0xx_it.c 
   * @author  MCD Application Team
   * @brief   Main Interrupt Service Routines.
   *          This file provides template for all exceptions handler and 
@@ -43,15 +43,16 @@
   * @{
   */
 
-/** @addtogroup Templates
+/** @addtogroup TIM_PWMInput
   * @{
   */
+
+extern uint8_t rxBuff[4];
 
 /* Private typedef -----------------------------------------------------------*/
 /* Private define ------------------------------------------------------------*/
 /* Private macro -------------------------------------------------------------*/
 /* Private variables ---------------------------------------------------------*/
-extern uint8_t rxBuff[4];
 extern TIM_HandleTypeDef    TimHandle;
 extern UART_HandleTypeDef		huart2;
 /* Private function prototypes -----------------------------------------------*/
@@ -137,30 +138,15 @@ void SysTick_Handler(void)
 }*/
 
 /**
-  * @brief  This function handles TIM2 interrupt request.
+  * @brief  This function handles TIM interrupt request.
   * @param  None
   * @retval None
   */
 void TIM2_IRQHandler(void)
 {
-	HAL_TIM_IRQHandler(&TimHandle);
+  HAL_TIM_IRQHandler(&TimHandle);
 }
 
-/**
-  * @brief  This function handles External lines 15 to 4 interrupt request.
-  * @param  None
-  * @retval None
-  */
-void EXTI4_15_IRQHandler(void)
-{
-  HAL_GPIO_EXTI_IRQHandler(KEY_BUTTON_PIN);
-}
-
-/**
-  * @brief  This function handles USART2 interrupt request.
-  * @param  None
-  * @retval None
-  */
 void USART2_IRQHandler(void)
 {
   HAL_UART_IRQHandler(&huart2);
